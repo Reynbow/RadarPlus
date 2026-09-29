@@ -1,0 +1,32 @@
+// Version information, shown in the DLL's Properties > Details in Windows.
+#include <winver.h>
+#include "version.h"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION RADARPLUS_VERSION_RC
+ PRODUCTVERSION RADARPLUS_VERSION_RC
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DLL
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Reynbow"
+            VALUE "FileDescription", "RadarPlus: minimap and world markers for CONTROL Resonant"
+            VALUE "FileVersion", RADARPLUS_VERSION
+            VALUE "InternalName", "radarplus"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Reynbow"
+            VALUE "OriginalFilename", "radarplus.dll"
+            VALUE "ProductName", "RadarPlus"
+            VALUE "ProductVersion", RADARPLUS_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
