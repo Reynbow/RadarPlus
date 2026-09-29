@@ -26,6 +26,19 @@ Requires Windows and the Visual Studio 2022 Build Tools (C++ workload). Run `bui
 
 `radarplus.dll` is loaded by [f2g DLL Mod Loader (crloader)](https://www.nexusmods.com/controlresonant/mods/9) from `crmods\RadarPlus`. At start-up it reads the game executable from disk, finds the game functions it needs by byte signatures, and installs a few inline hooks inside the game process only. `RadarPlus.js` is appended to the game's UI bundle when the game loads it, and talks to the DLL through a `coui://` endpoint. There is no network code; the mod writes only its own log and settings files in its own folder.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org). (Applied for; releases will be signed once the application is approved.)
+
+- Committers and reviewers: [Reynbow](https://github.com/Reynbow)
+- Approvers: [Reynbow](https://github.com/Reynbow)
+
+Only builds made by this repository's GitHub Actions workflow from the public source are signed, and each release is approved by hand first.
+
+## Privacy policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
 ## Credits
 
 - **fame2gin** for f2g DLL Mod Loader.
