@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: call build.bat
+
+      - name: Package (the crmods\\RadarPlus folder, as it goes in the game folder)
+        shell: pwsh
+        run: |
+          $dir = "package/crmods/RadarPlus"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item build/radarplus.dll, mod/* $dir
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadarPlus
+          path: package/
+          if-no-files-found: error

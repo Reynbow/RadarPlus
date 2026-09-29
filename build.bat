@@ -1,8 +1,15 @@
 @echo off
-rem Builds build\radarplus.dll with the VS 2022 Build Tools (x64, static CRT).
+rem Builds build\radarplus.dll (x64, static CRT) with Visual Studio 2022 or later (C++ build tools).
 setlocal
-set "VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-if not exist "%VCVARS%" set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+set "VCVARS="
+rem Find Visual Studio's C++ tools with Microsoft's locator; fall back to the usual Build Tools path.
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VCVARS=%%i\VC\Auxiliary\Build\vcvars64.bat"
+if not defined VCVARS set "VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+if not exist "%VCVARS%" (
+    echo Visual Studio with the C++ build tools was not found.
+    exit /b 1
+)
 call "%VCVARS%" >nul || exit /b 1
 cd /d "%~dp0"
 if not exist build mkdir build
