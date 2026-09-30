@@ -28,7 +28,7 @@ Requires Windows and the Visual Studio 2022 Build Tools (C++ workload). Run `bui
 
 ## Antivirus false positives
 
-Some antivirus tools, including Windows Defender (`Trojan:Win32/Wacatac.C!ml`), may flag the DLL because it is unsigned and hooks into the game. This is a false positive and has been reported to Microsoft. The full source is here, so you can check it or build the DLL yourself with `build.bat`.
+Some antivirus tools, including Windows Defender (`Trojan:Win32/Wacatac.B!ml` or `C!ml`), may flag the DLL because it is unsigned and hooks into the game. This is a false positive and has been reported to Microsoft. The full source is here, so you can check it or build the DLL yourself with `build.bat`.
 
 ## Privacy policy
 
@@ -38,6 +38,7 @@ This program will not transfer any information to other networked systems unless
 
 - **fame2gin** for f2g DLL Mod Loader.
 - **kkyleeb21** for Mod Settings Menu, and for MapFusion, which showed how to add scripts to the game's UI. RadarPlus's map overlay builds on the game-code research MapFusion did (signatures and map-scale constants); it contains none of MapFusion's files or code.
+- **hhkbble** for the world marker latency fix ([#1](https://github.com/Reynbow/RadarPlus/pull/1)).
 
 ## License
 
