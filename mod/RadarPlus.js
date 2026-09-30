@@ -568,6 +568,7 @@
     }
     function unmount() {
         releaseTiles();
+        resetWorldFeed();
         clearWorld();
         removeOurs(dom.sonar);
         restoreNative(dom.sonar);
@@ -587,6 +588,14 @@
             out.push({ el: c, poi: p, index: idx, applied: '', dx: 0, dy: 0, lk: null });
         }
         return out;
+    }
+    function poisAlive() {
+        if (!dom.pois || !dom.sonar) return false;
+        for (var i = 0; i < dom.pois.length; i++) {
+            var p = dom.pois[i];
+            if (p.el.parentNode !== dom.sonar || (p.poi && !connected(p.poi))) return false;
+        }
+        return true;
     }
     function mount() {
         unmount();
@@ -951,8 +960,9 @@
     function updateEdges() {
         if (!dom.pois || !dom.sonar) return;
         // If the game rebuilt the POI elements under us, pick up the new ones.
-        if (dom.pois.length && (dom.pois[0].el.parentNode !== dom.sonar || dom.pois[dom.pois.length - 1].el.parentNode !== dom.sonar)) {
+        if (!poisAlive()) {
             if (dom.lk.on) setLocked(false);
+            resetWorldFeed();
             dom.pois = mapPois(dom.sonar);
             log('poi elements were replaced; re-mapped ' + dom.pois.length, true);
         }
@@ -1669,15 +1679,21 @@
             (a * (e * r2 - r1 * h) - b * (d * r2 - r1 * g) + r0 * (d * h - e * g)) / det];
     }
 
-    var worldFeed = { pending: false, data: null, receivedAt: 0, error: '', replies: 0 };
+    var worldFeed = { pending: false, data: null, receivedAt: 0, error: '', replies: 0, generation: 0 };
+    function resetWorldFeed() {
+        ++worldFeed.generation;
+        worldFeed.pending = false; worldFeed.data = null; worldFeed.receivedAt = 0; worldFeed.error = '';
+    }
     function tickWorldFeed(t) {
-        if (worldFeed.pending) return;
+        if (stopped || worldFeed.pending) return;
+        var generation = worldFeed.generation, sending = true;
         worldFeed.pending = true;  // set before the call: the callback may run synchronously
         getJson(OWN_URL + 'world__.json?n=' + t, function (r, err) {
+            if (stopped || generation !== worldFeed.generation) return;
             worldFeed.pending = false;
             worldFeed.replies++;
             if (!r || r.installed !== true || !r.pois || typeof r.pois.length !== 'number') {
-                worldFeed.data = null; worldFeed.error = r ? 'not installed' : err; return;
+                worldFeed.data = null; worldFeed.error = r ? 'not installed' : err; hideWorld(); return;
             }
             r.bySlot = {};
             for (var i = 0; i < r.pois.length; i++) {
@@ -1685,7 +1701,13 @@
                 if (q && q.length >= 4 && finite(q[0]) && finite(q[1]) && finite(q[3])) r.bySlot[q[0]] = q;
             }
             worldFeed.data = r; worldFeed.receivedAt = now(); worldFeed.error = '';
+            // Late replies used to wait for the next RAF. Apply now without issuing another request.
+            // A synchronous reply is consumed by updateWorld after tickWorldFeed returns.
+            if (!sending) {
+                try { applyWorldSnapshot(r, worldFeed.receivedAt); } catch (e) { worldError(e); }
+            }
         }, 500);
+        sending = false;
     }
 
     var world = { layer: null, markers: {}, lastSync: 0, lastLog: 0, shown: 0 };
@@ -1778,10 +1800,20 @@
     }
 
     function updateWorld(t) {
-        var mode = level('world_markers');
-        if (!NATIVE.world || mode === LEVEL_NONE || !state.hudOn || !dom.pois) { hideWorld(); return; }
+        if (stopped || !NATIVE.world || level('world_markers') === LEVEL_NONE || !state.hudOn || !alive() || !dom.pois) { hideWorld(); return; }
         tickWorldFeed(t);
-        var r = worldFeed.data;
+        applyWorldSnapshot(worldFeed.data, now());
+    }
+    function worldError(e) {
+        if (!world.error) log('world error: ' + (e && e.stack || e), true);
+        world.error = String(e);
+        try { hideWorld(); } catch (e2) { }
+    }
+    function applyWorldSnapshot(r, t) {
+        var mode = level('world_markers');
+        if (stopped || !NATIVE.world || mode === LEVEL_NONE || !state.hudOn || !alive() || !dom.pois) { hideWorld(); return; }
+        // POIs can be replaced before the next RAF re-maps them; never clone the detached old icons.
+        if (!poisAlive()) { hideWorld(); return; }
         if (!r || t - worldFeed.receivedAt > 1000 || !(r.ageMs <= 1000) || !validMatrix(r.m)) { hideWorld(); return; }
         var layer = ensureWorldLayer();
         if (!layer) return;
@@ -1982,9 +2014,7 @@
         var b = DIAG ? clock() : 0;
         if (DIAG) note('edges', b - a);
         try { updateWorld(now()); } catch (e) {
-            if (!world.error) log('world error: ' + (e && e.stack || e), true);
-            world.error = String(e);
-            try { hideWorld(); } catch (e2) { }
+            worldError(e);
         }
         if (DIAG) note('world', clock() - b);
         try { updateMenuDescription(now()); } catch (e) {
