@@ -514,7 +514,7 @@
     function emptyDom() {
         return { container: null, sonar: null, glass: null, layer: null, backdrop: null, origin: null, inner: null,
             chrome: null, svgKey: '', outlineGroup: null, outline: null, objectives: [], legs: [], ear: null, label: null, north: null,
-            tiles: [], pois: null, round: [], bg: null, axis: null, cone: null, player: null, lk: { on: false, cone: '', shapeKey: '' } };
+            tiles: [], pois: null, poisStale: false, round: [], bg: null, axis: null, cone: null, player: null, lk: { on: false, cone: '', shapeKey: '' } };
     }
     dom = emptyDom();
 
@@ -589,13 +589,12 @@
         }
         return out;
     }
-    function poisAlive() {
-        if (!dom.pois || !dom.sonar) return false;
-        for (var i = 0; i < dom.pois.length; i++) {
-            var p = dom.pois[i];
-            if (p.el.parentNode !== dom.sonar || (p.poi && !connected(p.poi))) return false;
-        }
-        return true;
+    // A late world reply is applied outside the RAF, so the game may have replaced POI elements since
+    // updateEdges last mapped them. The icon a marker copies must still sit in the sonar (.poi, its
+    // container, the sonar: a couple of steps), or it would be a stale copy.
+    function poiAttached(poi) {
+        for (var n = poi, i = 0; n && i < 4; i++, n = n.parentNode) if (n === dom.sonar) return true;
+        return false;
     }
     function mount() {
         unmount();
@@ -960,9 +959,9 @@
     function updateEdges() {
         if (!dom.pois || !dom.sonar) return;
         // If the game rebuilt the POI elements under us, pick up the new ones.
-        if (!poisAlive()) {
+        if (dom.poisStale || (dom.pois.length && (dom.pois[0].el.parentNode !== dom.sonar || dom.pois[dom.pois.length - 1].el.parentNode !== dom.sonar))) {
             if (dom.lk.on) setLocked(false);
-            resetWorldFeed();
+            dom.poisStale = false;
             dom.pois = mapPois(dom.sonar);
             log('poi elements were replaced; re-mapped ' + dom.pois.length, true);
         }
@@ -1812,9 +1811,16 @@
     function applyWorldSnapshot(r, t) {
         var mode = level('world_markers');
         if (stopped || !NATIVE.world || mode === LEVEL_NONE || !state.hudOn || !alive() || !dom.pois) { hideWorld(); return; }
-        // POIs can be replaced before the next RAF re-maps them; never clone the detached old icons.
-        if (!poisAlive()) { hideWorld(); return; }
         if (!r || t - worldFeed.receivedAt > 1000 || !(r.ageMs <= 1000) || !validMatrix(r.m)) { hideWorld(); return; }
+        if (world.poisFor !== dom.pois) {
+            world.poisFor = dom.pois; world.live = {};
+            for (var j = 0; j < dom.pois.length; j++) if (dom.pois[j].poi) world.live[dom.pois[j].index] = dom.pois[j].poi;
+        }
+        var live = world.live;
+        for (var s = 0; s < r.pois.length; s++) {
+            var lp = r.pois[s] && live[r.pois[s][0]];
+            if (lp && !poiAttached(lp)) { dom.poisStale = true; hideWorld(); return; }  // re-mapped next RAF
+        }
         var layer = ensureWorldLayer();
         if (!layer) return;
         show(layer, true);
@@ -1835,11 +1841,6 @@
         var labels = option('world_marker_labels') >= 0.5;
         var sync = t - world.lastSync >= 100;
         if (sync) world.lastSync = t;
-        if (world.poisFor !== dom.pois) {
-            world.poisFor = dom.pois; world.live = {};
-            for (var j = 0; j < dom.pois.length; j++) if (dom.pois[j].poi) world.live[dom.pois[j].index] = dom.pois[j].poi;
-        }
-        var live = world.live;
         var seen = {}, shown = 0, sample = [];
         var margin = WORLD_EDGE_MARGIN * vh, hw = W / 2, hh = H / 2;
         for (var i = 0; i < r.pois.length; i++) {
