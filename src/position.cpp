@@ -38,8 +38,9 @@ static const char* kSigOwnerGetter = "48 8B 05 ?? ?? ?? ?? C3";
 static const uint8_t kPrologue[15] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                       0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57};
 
-using PositionUpdateFn = void (*)(void* table, void* markers, void* districts, void* districtStack, void* a5,
-                                  void* flags);
+// Build 25600401 dropped the sixth argument (the map screen's flags, whose byte 1 said "full map open"): nothing
+// reads that stack slot any more, so neither do we. The script asks the UI whether the map is open instead.
+using PositionUpdateFn = void (*)(void* table, void* markers, void* districts, void* districtStack, void* a5);
 using OwnerGetterFn = void* (*)();
 using ViewportSizeFn = uint32_t* (*)(void* owner, uint32_t* out);
 
@@ -52,7 +53,7 @@ struct Sample {
     uint64_t seq, tick, epoch, id;
     float world[3], proj[2], clip[2];
     uint32_t district, uiHeight;
-    bool valid, mapOpen;
+    bool valid;
 };
 static SRWLOCK g_lock = SRWLOCK_INIT;
 static Sample g_last = {};
@@ -61,7 +62,7 @@ static volatile LONG64 g_seq = 0, g_calls = 0, g_faults = 0;
 static bool Sane(float v) { return isfinite(v) && fabsf(v) <= 1e8f; }
 
 // Reads the marker appended by the original call. Pure C so SEH can guard every access.
-static bool ReadSample(void* table, void* markers, void* districtStack, void* flags, uint32_t before, Sample& s) {
+static bool ReadSample(void* table, void* markers, void* districtStack, uint32_t before, Sample& s) {
     __try {
         uint8_t* list = (uint8_t*)markers;
         uint32_t after = *(uint32_t*)(list + 8);
@@ -85,7 +86,6 @@ static bool ReadSample(void* table, void* markers, void* districtStack, void* fl
             if (!Sane(s.world[i])) return false;
         for (int i = 0; i < 2; ++i)
             if (!Sane(s.clip[i]) || !Sane(s.proj[i])) return false;
-        s.mapOpen = flags && ((uint8_t*)flags)[1] != 0;
         uint8_t* ds = (uint8_t*)districtStack;
         uint32_t count = *(uint32_t*)(ds + 8);
         if (count > 0x100) return false;
@@ -112,14 +112,13 @@ static bool ReadCount(void* markers, uint32_t& out) {
     }
 }
 
-static void HookedPositionUpdate(void* table, void* markers, void* districts, void* districtStack, void* a5,
-                                 void* flags) {
+static void HookedPositionUpdate(void* table, void* markers, void* districts, void* districtStack, void* a5) {
     uint32_t before = 0;
     bool counted = markers && ReadCount(markers, before);
-    g_original(table, markers, districts, districtStack, a5, flags);
+    g_original(table, markers, districts, districtStack, a5);
     InterlockedIncrement64(&g_calls);
     Sample s = {};
-    s.valid = counted && ReadSample(table, markers, districtStack, flags, before, s);
+    s.valid = counted && ReadSample(table, markers, districtStack, before, s);
     s.tick = GetTickCount64();
     if (!TryAcquireSRWLockExclusive(&g_lock)) return;  // never stall the game thread
     uint64_t epoch = g_last.epoch;
@@ -159,12 +158,12 @@ std::string PositionJson() {
     char buf[896];
     _snprintf_s(buf, sizeof(buf), _TRUNCATE,
                 "{\"installed\":%s,\"valid\":%s,\"seq\":%llu,\"epoch\":%llu,\"ageMs\":%llu,\"district\":%u,"
-                "\"uiHeight\":%u,\"mapOpen\":%s,\"x\":%.4f,\"y\":%.4f,\"clipX\":%.4f,\"clipY\":%.4f,"
+                "\"uiHeight\":%u,\"x\":%.4f,\"y\":%.4f,\"clipX\":%.4f,\"clipY\":%.4f,"
                 "\"wx\":%.3f,\"wy\":%.3f,\"wz\":%.3f,\"zoom\":%d,\"zoomSerial\":%u,"
                 "\"rings\":[%.3f,%.3f,%.3f,%.3f],\"keys\":[%u,%u,%u,%u],\"calls\":%lld,\"faults\":%lld}",
                 g_installed ? "true" : "false", s.valid ? "true" : "false", (unsigned long long)s.seq,
                 (unsigned long long)s.epoch, (unsigned long long)age, s.district, s.uiHeight,
-                s.mapOpen ? "true" : "false", s.proj[0], s.proj[1], s.clip[0], s.clip[1], s.world[0], s.world[1],
+                s.proj[0], s.proj[1], s.clip[0], s.clip[1], s.world[0], s.world[1],
                 s.world[2], CurrentZoom(), ZoomSerial(), rings[0], rings[1], rings[2], rings[3], keys[0], keys[1],
                 keys[2], keys[3], (long long)g_calls, (long long)g_faults);
     return buf;

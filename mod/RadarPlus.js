@@ -391,18 +391,35 @@
     })();
     var subscribed = false, lastSaved = {}, lastAtlasCheck = 0;
     function round2(v) { return Math.round(v * 100) / 100; }
+    // Diagnostics: what the map learning sees while the full map is open, every 2 s.
+    var lastAtlasLog = 0;
+    function atlasDiag(p, t, markers, player) {
+        lastAtlasLog = t;
+        var images = 0, first = '';
+        for (var i = 0; i < MAX_TILES; i++) {
+            var path = model('ui_map_district_images_' + i + '_path', ''), b = model('ui_map_district_images_' + i + '_map_bounds', null);
+            if (typeof path !== 'string' || !path) continue;
+            images++;
+            if (!first) first = path + ' [' + (b ? [b.x, b.y, b.z, b.w].join(',') : 'no bounds') + ']';
+        }
+        log('atlas check: district ' + p.district + (atlasCache[String(p.district)] ? ' (cached)' : '') + ', ' + markers + ' map markers, player ' +
+            (player ? player.x.toFixed(1) + ',' + player.y.toFixed(1) : 'none') + ' vs native ' + p.clipX.toFixed(1) + ',' +
+            p.clipY.toFixed(1) + ', ' + images + ' district images' + (first ? ', first ' + first : ''));
+    }
     function learnAtlas(p) {
         // Only while the full map is open does the UI publish the district images. Accept them only
         // when the map's own player marker agrees with our native sample, i.e. same coordinate space.
-        if (!p.mapOpen || !model('ui_stacks_game_states_map_active', false)) return;
+        // (The DLL's own "map open" flag went with the game's 1 October update; the UI says it instead.)
+        if (!model('ui_stacks_game_states_map_active', false)) return;
         var t = now();
         if (t - lastAtlasCheck < 500) return;  // the images don't change while the map is open
         lastAtlasCheck = t;
         if (!subscribed && window.DataAPI && typeof DataAPI.listSubscribe === 'function') {
             try { DataAPI.listSubscribe('ui_map_markers'); subscribed = true; } catch (e) { }
         }
-        var player = null;
-        readList(window.ui_map_markers).forEach(function (m) { if (m.player && !player) player = m; });
+        var player = null, markers = readList(window.ui_map_markers);
+        markers.forEach(function (m) { if (m.player && !player) player = m; });
+        if (DIAG && t - lastAtlasLog > 2000) atlasDiag(p, t, markers.length, player);
         if (!player || Math.abs(player.x - p.clipX) >= 2 || Math.abs(player.y - p.clipY) >= 2) return;
         var factor = p.uiHeight / 1080, tiles = [];
         for (var i = 0; i < MAX_TILES; i++) {
@@ -580,11 +597,12 @@
     }
     function mapPois(sonar) {
         var list = sonar.querySelectorAll('.poi-container'), out = [];
+        out.bound = 0;  // slots whose index came from their bindings; the rest go by DOM order
         for (var j = 0; j < list.length; j++) {
             var c = list[j], p = c.querySelector('.poi'), idx = j;
             var attr = p ? (p.getAttribute('data-bind-style-transform2d') || p.getAttribute('data-bind-class-toggle') || '') : '';
             var m = /hud_sonar_poi_(\d+)_/.exec(attr);
-            if (m) idx = Number(m[1]);
+            if (m) { idx = Number(m[1]); out.bound++; }
             out.push({ el: c, poi: p, index: idx, applied: '', dx: 0, dy: 0, lk: null });
         }
         return out;
@@ -595,6 +613,11 @@
     function poiAttached(poi) {
         for (var n = poi, i = 0; n && i < 4; i++, n = n.parentNode) if (n === dom.sonar) return true;
         return false;
+    }
+    function attrList(n) {
+        var out = [];
+        for (var i = 0; n.attributes && i < n.attributes.length && out.length < 6; i++) out.push(n.attributes[i].name + '="' + String(n.attributes[i].value).slice(0, 70) + '"');
+        return out.join(' ');
     }
     function mount() {
         unmount();
@@ -651,7 +674,8 @@
         if (DIAG) {
             var r = dom.container.getBoundingClientRect();
             log('sonar mounted: rect ' + [r.left, r.top, r.width, r.height].map(Math.round).join(',') + ' view ' +
-                window.innerWidth + 'x' + window.innerHeight + ', ' + dom.pois.length + ' poi slots');
+                window.innerWidth + 'x' + window.innerHeight + ', ' + dom.pois.length + ' poi slots (' + dom.pois.bound + ' indexed by their bindings)' +
+                (dom.pois[0] && dom.pois[0].poi ? ', first poi: class "' + dom.pois[0].poi.className + '" attrs ' + attrList(dom.pois[0].poi) : ''));
         }
         return true;
     }
@@ -955,7 +979,7 @@
         return r;
     }
 
-    var edge = { rEdge: 0, samples: 0, arcSamples: 0, error: '', lastSync: 0, lastFeed: 0 };
+    var edge = { rEdge: 0, samples: 0, arcSamples: 0, error: '', lastSync: 0, lastFeed: 0, lastSample: 0 };
     function updateEdges() {
         if (!dom.pois || !dom.sonar) return;
         // If the game rebuilt the POI elements under us, pick up the new ones.
@@ -964,6 +988,18 @@
             dom.poisStale = false;
             dom.pois = mapPois(dom.sonar);
             log('poi elements were replaced; re-mapped ' + dom.pois.length, true);
+        }
+        // Diagnostics: each visible slot's data next to the class of the element we pair it with.
+        if (DIAG && now() - edge.lastSample > 5000) {
+            edge.lastSample = now();
+            var sample = [];
+            for (var q = 0; q < dom.pois.length && sample.length < 8; q++) {
+                var ep = dom.pois[q], pq = 'hud_sonar_poi_' + ep.index + '_';
+                if (!model(pq + 'visible', false)) continue;
+                sample.push(ep.index + ': type ' + model(pq + 'map_marker_type', '?') + ' css ' + model(pq + 'type_css_class', '?') +
+                    ' -> el "' + (ep.poi ? String(ep.poi.className).slice(0, 80) : '-') + '"');
+            }
+            log('poi sample: ' + (sample.join(' | ') || 'none visible'));
         }
         // North is read here, every frame, next to the icon positions it turns: the 33 ms loop's copy
         // would be a few frames old while the camera turns, and icons would jump back and forth.
@@ -1938,6 +1974,7 @@
             syncZoom(t);
             if (!alive() && !mount()) {
                 state.hudOn = false;
+                if (DIAG && t - lastDiag > 3000) { lastDiag = t; log('state: no sonar mounted (map open ' + !!model('ui_stacks_game_states_map_active', false) + ')'); }
                 feed.tick(t, 250);
                 tickKeyFeed(t);
                 handleKeys(SOURCE === 'mapfusion' ? keyFeed.counts : feed.info && feed.info.keys, t);
