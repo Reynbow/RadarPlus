@@ -16,10 +16,12 @@ static const char* kSigPositionUpdate =
     "C0 00 00 00 49 8B DF C5 F8 29 B4 24 90 00 00 00 48 C1 E3 05 48 8B CF 48 03 5C 24 60 C5 F8 29 BC 24 80 00 00 "
     "00 C4 C3 F9 16 CC 01 C5 F8 10 43 10 C5 F8 11 44 24 60 C5 F8 77 E8 ?? ?? ?? ??";
 static const char* kSigDistrictGetter = "8B 41 08 48 C1 E0 04 48 03 01 48 39 01 75 ?? 48 8D 41 20";
-// Pushes the 40-byte marker record; checked so a changed record layout disables us.
+// Pushes the 40-byte marker record; checked so a changed record layout disables us. Build 25600401 fills a new byte
+// at +0x1d (padding before: movzx eax, [rax+8]; mov [rsp+0x4d], al); the fields we read (+0x10, +0x14) are as before.
 static const char* kSigMarkerLayout =
     "48 89 5C 24 30 48 89 44 24 38 C5 FA 10 84 24 B8 00 00 00 C5 FA 11 44 24 40 C5 FA 10 8C 24 BC 00 00 00 C5 FA "
-    "11 4C 24 44 48 8B 84 24 E0 00 00 00 C5 FA 10 00 C5 FA 11 44 24 48 88 54 24 4C C5 7A 11 44 24 50 40 88 7C 24 "
+    "11 4C 24 44 48 8B 84 24 E0 00 00 00 C5 FA 10 00 C5 FA 11 44 24 48 88 54 24 4C 0F B6 40 08 88 44 24 4D "
+    "C5 7A 11 44 24 50 40 88 7C 24 "
     "54 8B 46 0C 4C 8D 04 80 49 C1 E0 03 8B 5E 08 48 8D 0C 9B 48 C1 E1 03 4C 8B 36 49 3B C8 0F 85 ?? ?? ?? ?? 49 "
     "B9 67 66 66 66 66 66 66 66 49 8B C1 48 F7 E9 48 8B DA 48 C1 FB 04 48 8B C3 48 C1 E8 3F 48 03 D8 48 8D 4B 01 "
     "49 8B C1 49 F7 E8 48 C1 FA 04 48 8B C2 48 C1 E8 3F 48 03 D0 4C 8B FA 49 D1 EF 4C 03 FA 4C 3B F9 4C 0F 42 F9 "

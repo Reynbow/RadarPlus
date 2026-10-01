@@ -35,8 +35,9 @@ static const char* kSigEntryLayout =
     "48 8D 14 80 48 03 D2 49 8B 04 24 48 89 04 D7 48 8B 45 00 48 89 44 D7 08 49 8B 07 48 89 44 D7 10";
 static const char* kSigEntryWorld = "48 8B 84 24 A8 00 00 00 C5 F8 10 00 C5 F8 11 44 D7 40 FF 43 08";
 
-// The HUD's world-to-screen (used by the "world-to-screen" UI data transform). At +0xb4 it calls
-// the camera getter (lea rax,[camera] ; ret), at +0x122 the projection core.
+// The HUD's world-to-screen (used by the "world-to-screen" UI data transform). It copies two cameras, each from a
+// getter (lea rax,[camera] ; ret; then mov rdx, rax), and hands the second to the projection core (+0xb4 and +0x122
+// on build 25472515, +0xbc and +0x12a on 25600401, which added an 8-byte store before them).
 static const char* kSigWorldToScreen =
     "48 8B C4 55 56 48 81 EC 48 06 00 00 C5 FA 10 15 ?? ?? ?? ?? C5 FA 10 05 ?? ?? ?? ?? C5 FA 10 0D ?? ?? ?? ?? "
     "C5 78 29 48 B8 C5 78 29 50 A8 48 89 58 10 48 8B F1 48 89 78 E8 48 8D 4C 24 30 C5 F8 28 DA 48 8B FA 49 8B E8 "
@@ -277,22 +278,31 @@ bool FindWorldTargets(const Image& img, WorldTargets& out, std::string& err) {
 
     uint32_t w2s = FindUnique(img, "world to screen", kSigWorldToScreen, err);
     if (!w2s) return false;
-    if (!img.Contains(w2s + 0x122, 5) || img.mem[w2s + 0xb4] != 0xE8 || img.mem[w2s + 0x122] != 0xE8) {
+    // The projection core's call, and the last camera getter call before it (its camera is the one the core gets).
+    uint32_t getterCall = 0, coreCall = 0;
+    for (uint32_t at = w2s; at < w2s + 0x200 && img.Contains(at, 8); ++at) {
+        if (img.mem[at] != 0xE8) continue;
+        const uint32_t t = CallTarget(img, at);
+        if (!img.Contains(t, 0x80)) continue;
+        if (MatchSig(img, t, kSigCameraGetter) && MatchSig(img, at + 5, "48 8B D0")) {
+            getterCall = at;
+        } else if (MatchSig(img, t, kSigProjectCore)) {
+            coreCall = at;
+            break;
+        }
+    }
+    if (!getterCall || !coreCall) {
         err = "world to screen: calls not where expected";
         return false;
     }
-    uint32_t getter = CallTarget(img, w2s + 0xb4);
-    if (!MatchSig(img, getter, kSigCameraGetter)) {
-        err = "camera getter: unexpected code";
-        return false;
-    }
+    uint32_t getter = CallTarget(img, getterCall);
     uint32_t camera = RipTarget(img, getter, 3, 7);
     const Section* cs = img.SectionOf(camera);
     if (!cs || !cs->write || cs->exec) {
         err = "camera is not in writable data";
         return false;
     }
-    uint32_t core = CallTarget(img, w2s + 0x122);
+    uint32_t core = CallTarget(img, coreCall);
     if (!MatchSig(img, core, kSigProjectCore) || !MatchSig(img, core + 0x52, kSigProjectRows)) {
         err = "projection core: unexpected code";
         return false;

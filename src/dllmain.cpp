@@ -8,7 +8,7 @@ HMODULE g_self = nullptr;
 std::wstring g_modDir;
 uintptr_t g_gameBase = 0;
 
-static const char* kKnownBuild = "6ab107a0-06301000-05eedcbd";  // 25472515: PE time stamp, image size, checksum
+static const char* kKnownBuild = "6aba5bb8-063da000-05fbdb88";  // 25600401: PE time stamp, image size, checksum
 static bool g_mapFusion = false;  // the old MapFusion minimap is still installed
 static bool g_position = false, g_rings = false, g_world = false;
 
@@ -137,7 +137,7 @@ static void Setup() {
         return;
     }
     Log("Game EXE build %s (%s)", build.c_str(),
-        build == kKnownBuild ? "known build 25472515" : "other build; running on signatures");
+        build == kKnownBuild ? "known build 25600401" : "other build; running on signatures");
 
     LoadAtlasCache();
     LoadFilters();
