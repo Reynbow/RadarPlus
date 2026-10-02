@@ -1486,6 +1486,9 @@
     var FILTER_KINDS = { objective: 'Tracked objective', pin: 'Your pins', quest: 'Quests', bounty: 'Bounties',
         friend: 'Friends', enemy: 'Enemies', other: 'Other icons' };
     var FILTER_ICON = { objective: 11, quest: 7, bounty: 3 };  // their map icons
+    // The map's marker pictures by type. Since the game's 1 October update its UI binds this URL instead of
+    // having a map-marker-icon--N class per type (.map-marker-icon still sizes and centres the picture).
+    var MAP_MARKER_PICTURE = 'coui://base/textures/uiresources/UI/automatic/map/map_markers/map_marker-';
     // The radar draws friends and enemies as dots in these colours (the game's .poi--Friend and
     // .poi--FodderEnemy); the map's own friend image is blank.
     var FILTER_DOT = { friend: 'friend', enemy: 'enemy', other: 'other' };
@@ -1608,7 +1611,8 @@
         var tiles = filterKeys(target).map(function (k) {
             var icon = k === 'pin' ? '<div class="rp-filter__pin"><div class="rp-filter__pin-n">1</div></div>' :
                 FILTER_DOT[k] ? '<div class="rp-filter__dot rp-filter__dot--' + FILTER_DOT[k] + '"></div>' :
-                '<div class="map-marker-icon map-marker-icon--' + (FILTER_ICON[k] !== undefined ? FILTER_ICON[k] : k.slice(1)) + ' rp-filter__icon"></div>';
+                '<div class="map-marker-icon rp-filter__icon" style="background-image:url(\'' + MAP_MARKER_PICTURE +
+                (FILTER_ICON[k] !== undefined ? FILTER_ICON[k] : k.slice(1)) + '.png\')"></div>';
             return '<div class="rp-filter__tile' + (filters[target][k] ? ' rp-filter__tile--off' : '') + '" data-key="' + k + '">' + icon +
                 '<div class="rp-filter__strike"></div></div>';
         }).join('');
