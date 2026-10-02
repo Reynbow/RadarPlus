@@ -1760,14 +1760,31 @@
         }
         names.forEach(function (k) { n.removeAttribute(k); });
     }
-    // A copy of the slot's .poi without its data bindings; syncIcon keeps its classes and numbers in
-    // step with the original, so it looks exactly like the sonar icon.
+    // The style properties a node gets from bindings (data-bind-style-*). The map marker's picture is one:
+    // background-image-url, from the slot's marker type. The copy's root keeps our own transform.
+    function boundStyles(n, isRoot) {
+        var out = [];
+        for (var i = 0; n.attributes && i < n.attributes.length; i++) {
+            var name = n.attributes[i] && n.attributes[i].name;
+            if (typeof name !== 'string' || name.indexOf('data-bind-style-') !== 0) continue;
+            var prop = name.slice(16);
+            if (prop === 'transform2d') prop = 'transform';
+            else if (prop === 'background-image-url') prop = 'background-image';
+            if (isRoot && prop === 'transform') continue;
+            out.push(prop.replace(/-([a-z])/g, function (m, c) { return c.toUpperCase(); }));
+        }
+        return out;
+    }
+    // A copy of the slot's .poi without its data bindings; syncIcon keeps its classes, numbers and bound
+    // styles in step with the original, so it looks exactly like the sonar icon even when the game hands
+    // the slot to another marker.
     function copyIcon(live) {
         var root = live.cloneNode(true), pairs = [];
         (function walk(a, b) {
             var text = !!(b.getAttribute && b.getAttribute('data-bind-value'));
+            var styles = boundStyles(b, b === root);
             stripBindings(b);
-            pairs.push({ live: a, copy: b, text: text });
+            pairs.push({ live: a, copy: b, text: text, styles: styles });
             var ac = elementChildren(a), bc = elementChildren(b);
             for (var i = 0; i < ac.length && i < bc.length; i++) walk(ac[i], bc[i]);
         })(live, root);
@@ -1779,6 +1796,10 @@
             var p = copy.pairs[i], c = p.live.className;
             if (typeof c === 'string' && p.copy.className !== c) p.copy.className = c;
             if (p.text && p.copy.textContent !== p.live.textContent) p.copy.textContent = p.live.textContent;
+            for (var j = 0; j < p.styles.length; j++) {
+                var k = p.styles[j], v = p.live.style[k];
+                if (typeof v === 'string' && p.copy.style[k] !== v) p.copy.style[k] = v;
+            }
         }
     }
     function findWorldHost() {
