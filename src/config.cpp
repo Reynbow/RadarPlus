@@ -12,7 +12,8 @@ static const char* kMenuKeys[] = {"radar_size",         "radar_shape",       "ra
                                   "radar_range",        "radar_icon_range",  "radar_zoom",         "terrain_enabled",
                                   "terrain_opacity",    "radar_backdrop",    "world_markers",      "world_marker_size",
                                   "world_marker_range", "world_marker_labels", "world_marker_combat",
-                                  "map_icons"};
+                                  "map_icons",          "reveal_mode",       "reveal_seconds",     "reveal_pad",
+                                  "reveal_key"};
 
 static std::wstring IniPath() { return g_modDir + L"RadarPlus.ini"; }
 static std::wstring MenuIniPath() { return g_modDir + L"ModMenuConfig\\radarplus.ini"; }
@@ -133,6 +134,12 @@ void LoadConfig() {
         c.menu.push_back({key, v});
     }
     g_cfg = c;
+}
+
+double MenuSetting(const char* key, double fallback) {
+    for (const Config::MenuValue& m : g_cfg.menu)
+        if (strcmp(m.key, key) == 0 && m.value >= 0) return m.value;  // -1: not saved yet
+    return fallback;
 }
 
 }  // namespace rp

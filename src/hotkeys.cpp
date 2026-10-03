@@ -21,6 +21,7 @@ static bool Down(int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; }
 static DWORD WINAPI HotkeyThread(void*) {
     struct State { bool down = false; ULONGLONG nextRepeat = 0; } st[kKeyCount];
     const bool repeats[kKeyCount] = {false, false, true, true};  // holding +/- keeps resizing
+    bool revealDown = false;
     for (;;) {
         Sleep(15);
         const bool focus = GameHasFocus();
@@ -38,6 +39,13 @@ static DWORD WINAPI HotkeyThread(void*) {
             }
             st[i].down = down;
         }
+        // Show on press: its keyboard key, once per press. A modifier is allowed as the key itself.
+        const int rvk = RevealVk();
+        const bool modifier = rvk == VK_SHIFT || rvk == VK_CONTROL || rvk == VK_MENU || rvk == VK_LWIN || rvk == VK_RWIN ||
+                              (rvk >= VK_LSHIFT && rvk <= VK_RMENU);
+        const bool rdown = focus && (modifier || !chord) && Down(rvk);
+        if (rdown && !revealDown) CountRevealPress();
+        revealDown = rdown;
     }
 }
 
@@ -46,9 +54,6 @@ void KeyCounts(uint32_t out[kKeyCount]) {
 }
 
 void StartHotkeys() {
-    bool any = false;
-    for (const Config::Key& k : g_cfg.keys) any = any || k.vk;
-    if (!any) return;
     HANDLE h = CreateThread(nullptr, 0, HotkeyThread, nullptr, 0, nullptr);
     if (!h) return;
     CloseHandle(h);

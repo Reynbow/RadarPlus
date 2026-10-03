@@ -10,13 +10,14 @@ Download and install instructions are on Nexus Mods (search for RadarPlus in the
 - Lock rotation: north stays at the top.
 - Map overlay: the area map under the radar, following your position and camera.
 - World markers: the radar's icons over their objects in the world, with distances.
+- Show on press: the radar or the world markers stay hidden until you press a button or key (D-pad Up by default), then show for a few seconds.
 - Choose which icons the radar, the world markers and the main map show.
 - Hotkeys to zoom and resize; all settings in game under Options > MODS > RadarPlus.
 
 ## Requirements (to play)
 
 - [f2g DLL Mod Loader (crloader)](https://www.nexusmods.com/controlresonant/mods/9)
-- [Mod Settings Menu](https://www.nexusmods.com/controlresonant/mods/35)
+- [Mod Settings Menu](https://www.nexusmods.com/controlresonant/mods/35) 1.7.1 or newer
 
 ## Building
 
@@ -24,7 +25,7 @@ Requires Windows and the Visual Studio 2022 Build Tools (C++ workload). Run `bui
 
 ## How it works
 
-`radarplus.dll` is loaded by [f2g DLL Mod Loader (crloader)](https://www.nexusmods.com/controlresonant/mods/9) from `crmods\RadarPlus`. At start-up it reads the game executable from disk, finds the game functions it needs by byte signatures, and installs a few inline hooks inside the game process only. `RadarPlus.js` is appended to the game's UI bundle when the game loads it, and talks to the DLL through a `coui://` endpoint. There is no network code; the mod writes only its own log and settings files in its own folder.
+`radarplus.dll` is loaded by [f2g DLL Mod Loader (crloader)](https://www.nexusmods.com/controlresonant/mods/9) from `crmods\RadarPlus`. At start-up it reads the game executable from disk, finds the game functions it needs by byte signatures, and installs a few inline hooks inside the game process only. `RadarPlus.js` is appended to the game's UI bundle when the game loads it, and talks to the DLL through a `coui://` endpoint. Hotkeys and the Show on press button are read only while the game window is in front: the keyboard with `GetAsyncKeyState`, controllers through XInput and, for DualSense and DualShock 4, their HID reports (read only, so the game still gets every press). There is no network code; the mod writes only its own log and settings files in its own folder.
 
 ## Antivirus false positives
 

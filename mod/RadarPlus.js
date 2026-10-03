@@ -155,7 +155,7 @@
     var DEFAULTS = {
         radar_size: 100, radar_shape: 0, radar_north_up: 0, radar_icons: 3, radar_range: GAME_RING, radar_icon_range: 900, terrain_enabled: 1, terrain_opacity: 65,
         radar_backdrop: 0, world_markers: 2, world_marker_size: 100, world_marker_range: 300, world_marker_labels: 1,
-        world_marker_combat: 0, map_icons: 3
+        world_marker_combat: 0, map_icons: 3, reveal_mode: 0, reveal_seconds: 5, reveal_pad: 268, reveal_key: 0
     };
     // Hotkey changes CRModMenu did not take (or no CRModMenu): kept until the menu value changes.
     var overrides = {};
@@ -163,6 +163,7 @@
         var v;
         try { if (window.CMM && typeof window.CMM.value === 'function') v = window.CMM.value(MOD_ID, key); } catch (e) { v = undefined; }
         if (typeof v === 'boolean') v = v ? 1 : 0;
+        else if (typeof v === 'string' && v.trim() !== '' && isFinite(v)) v = Number(v);  // a value handed over as text
         return finite(v) ? v : undefined;
     }
     function option(key) {
@@ -218,12 +219,12 @@
         };
     })();
     // With MapFusion's DLL serving positions, our own DLL still counts the hotkeys.
-    var keyFeed = { pending: false, next: 0, counts: null };
+    var keyFeed = { pending: false, next: 0, counts: null, reveal: null };
     function tickKeyFeed(t) {
         if (SOURCE !== 'mapfusion' || keyFeed.pending || t < keyFeed.next) return;
         keyFeed.next = t + 100;
         keyFeed.pending = true;
-        getJson(OWN_URL + 'keys__.json?n=' + t, function (r) { keyFeed.pending = false; if (r && r.keys) keyFeed.counts = r.keys; }, 600);
+        getJson(OWN_URL + 'keys__.json?n=' + t, function (r) { keyFeed.pending = false; if (r && r.keys) { keyFeed.counts = r.keys; keyFeed.reveal = r.reveal; } }, 600);
     }
 
     // ------------------------------------------------------------------ sonar range (zoom)
@@ -589,7 +590,10 @@
         clearWorld();
         removeOurs(dom.sonar);
         restoreNative(dom.sonar);
-        if (dom.container) { setStyle(dom.container, 'transform', ''); setStyle(dom.container, 'transformOrigin', ''); }
+        if (dom.container) {
+            setStyle(dom.container, 'transform', ''); setStyle(dom.container, 'transformOrigin', '');
+            setStyle(dom.container, 'opacity', ''); setStyle(dom.container, 'transition', '');
+        }
         applyNeighbours(0);
         dom = emptyDom();
         lastLayoutKey = '';
@@ -1853,6 +1857,34 @@
         else if (combat.on && t - combat.lastSeen > WORLD_COMBAT_GRACE) combat.on = false;
         return combat.on;
     }
+    // Show on press: the DLL counts presses of the show button (any controller) and key (read-only, so both keep
+    // their game actions). Each new press shows the chosen parts for the set time from that press: holding doesn't
+    // extend it, pressing again starts it over. Values: 1 Radar, 2 World markers, 3 Both.
+    var REVEAL_RADAR = 1, REVEAL_WORLD = 2;
+    var reveal = { count: null, until: 0 };
+    function trackReveal(t) {
+        var info = SOURCE === 'mapfusion' ? { reveal: keyFeed.reveal } : feed.info, n = info && finite(info.reveal) ? info.reveal : null;
+        if (n === null) return;
+        if (reveal.count !== null && n !== reveal.count) {
+            reveal.until = t + clamp(option('reveal_seconds'), 1, 30) * 1000;
+            if (DIAG) log('show on press: press ' + n + ', mode ' + option('reveal_mode') + ', shown for ' + clamp(option('reveal_seconds'), 1, 30) + ' s');
+        }
+        reveal.count = n;
+    }
+    // The show button and key are Mod Settings Menu key options; the DLL watches whichever are bound.
+    var revealKeys = { sent: '', pending: false, retryAt: 0 };
+    function syncRevealKeys(t) {
+        var pad = Math.round(option('reveal_pad')), key = Math.round(option('reveal_key')), want = pad + ',' + key;
+        if (want === revealKeys.sent || revealKeys.pending || t < revealKeys.retryAt) return;
+        revealKeys.pending = true;
+        getJson(OWN_URL + 'reveal__.json?pad=' + pad + '&key=' + key, function (r) {
+            revealKeys.pending = false;
+            if (r) revealKeys.sent = want;  // a refusal (a code the menu wouldn't store) isn't retried
+            else revealKeys.retryAt = now() + 2000;
+            if (r && r.ok !== true) log('show on press: the DLL refused button ' + pad + ' / key ' + key, true);
+        }, 1000);
+    }
+    function waitsForPress(part, t) { return (Math.round(option('reveal_mode')) & part) !== 0 && t >= reveal.until; }
     function hideWorld() {
         if (!world.layer) return;
         show(world.layer, false);
@@ -1885,8 +1917,8 @@
         var layer = ensureWorldLayer();
         if (!layer) return;
         show(layer, true);
-        // Fading out for combat; once it has faded, the markers are left as they are until it's over.
-        if (option('world_marker_combat') >= 0.5 && inCombat(t)) {
+        // Fading out for combat, or until a press (Show on press); once faded, the markers are left as they are.
+        if ((option('world_marker_combat') >= 0.5 && inCombat(t)) || waitsForPress(REVEAL_WORLD, t)) {
             if (!world.fadedAt) world.fadedAt = t;
             setStyle(layer, 'opacity', '0');
             if (t - world.fadedAt > 350) return;
@@ -2003,6 +2035,8 @@
                 feed.tick(t, 250);
                 tickKeyFeed(t);
                 handleKeys(SOURCE === 'mapfusion' ? keyFeed.counts : feed.info && feed.info.keys, t);
+                trackReveal(t);
+                syncRevealKeys(t);
                 timer = setTimeout(frame, 250);
                 return;
             }
@@ -2026,6 +2060,11 @@
             var p = feed.get(t);
             if (feed.info) applyZoomReply(feed.info);
             handleKeys(SOURCE === 'mapfusion' ? keyFeed.counts : feed.info && feed.info.keys, t);
+            trackReveal(t);
+            syncRevealKeys(t);
+            // Show on press, Radar: the radar waits for a press (a fade on the game's container, which has no style bindings).
+            setStyle(dom.container, 'transition', 'opacity .3s');
+            setStyle(dom.container, 'opacity', waitsForPress(REVEAL_RADAR, t) ? '0' : '');
             if (p) learnAtlas(p);
             var north = parseAngle(model('hud_sonar_rotation', ''));
             state.shape = shape; state.hudOn = hudOn; state.north = north; state.locked = option('radar_north_up') >= 0.5;
@@ -2042,7 +2081,9 @@
                     ' size=' + option('radar_size') + ' zoom=' + zoom.percent + ' ring=' + zoom.rings.join('/') + ' north=' +
                     (north === null ? 'none' : north.toFixed(2)) + ' pos=' + (p ? p.district + ':' + p.x.toFixed(1) + ',' + p.y.toFixed(1) +
                     ' epoch ' + p.epoch : 'none (' + feed.error() + ')') + ' atlas=' + Object.keys(atlasCache).join(',') +
-                    ' rEdge=' + edge.rEdge.toFixed(1) + (lastError ? ' lastError=' + lastError : '') + (edge.error ? ' edgeError=' + edge.error : ''));
+                    ' rEdge=' + edge.rEdge.toFixed(1) + ' show=' + option('reveal_mode') + '/' + (t < reveal.until ? 'shown' : 'waiting') +
+                    ' (menu ' + (function () { try { return typeof window.CMM.value(MOD_ID, 'reveal_mode'); } catch (e) { return 'n/a'; } })() + ')' +
+                    (lastError ? ' lastError=' + lastError : '') + (edge.error ? ' edgeError=' + edge.error : ''));
             }
         } catch (e) {
             lastError = String(e && e.stack || e);

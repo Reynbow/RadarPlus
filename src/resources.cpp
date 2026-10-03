@@ -306,7 +306,16 @@ static void HandleEndpoint(const char* url, size_t pathLen, void* resp) {
         uint32_t k[kKeyCount];
         KeyCounts(k);
         char buf[96];
-        sprintf_s(buf, "{\"keys\":[%u,%u,%u,%u]}", k[0], k[1], k[2], k[3]);
+        sprintf_s(buf, "{\"keys\":[%u,%u,%u,%u],\"reveal\":%u}", k[0], k[1], k[2], k[3], RevealPresses());
+        body = buf;
+    } else if (name == "reveal__.json") {
+        // Show on press: the controller button and keyboard key the player bound in Mod Settings Menu.
+        std::string p, k;
+        auto number = [](const std::string& v) { return !v.empty() && v.size() <= 3 && v.find_first_not_of("0123456789") == std::string::npos; };
+        bool ok = QueryParam(query, "pad", p) && QueryParam(query, "key", k) && number(p) && number(k) &&
+                  SetRevealKeys(atoi(p.c_str()), atoi(k.c_str()));
+        char buf[96];
+        sprintf_s(buf, "{\"ok\":%s,\"pad\":%d,\"key\":%d}", ok ? "true" : "false", RevealPadCode(), RevealVk());
         body = buf;
     } else if (name == "atlas__.json") {
         std::string d, j;

@@ -160,12 +160,12 @@ std::string PositionJson() {
                 "{\"installed\":%s,\"valid\":%s,\"seq\":%llu,\"epoch\":%llu,\"ageMs\":%llu,\"district\":%u,"
                 "\"uiHeight\":%u,\"x\":%.4f,\"y\":%.4f,\"clipX\":%.4f,\"clipY\":%.4f,"
                 "\"wx\":%.3f,\"wy\":%.3f,\"wz\":%.3f,\"zoom\":%d,\"zoomSerial\":%u,"
-                "\"rings\":[%.3f,%.3f,%.3f,%.3f],\"keys\":[%u,%u,%u,%u],\"calls\":%lld,\"faults\":%lld}",
+                "\"rings\":[%.3f,%.3f,%.3f,%.3f],\"keys\":[%u,%u,%u,%u],\"reveal\":%u,\"calls\":%lld,\"faults\":%lld}",
                 g_installed ? "true" : "false", s.valid ? "true" : "false", (unsigned long long)s.seq,
                 (unsigned long long)s.epoch, (unsigned long long)age, s.district, s.uiHeight,
                 s.proj[0], s.proj[1], s.clip[0], s.clip[1], s.world[0], s.world[1],
                 s.world[2], CurrentZoom(), ZoomSerial(), rings[0], rings[1], rings[2], rings[3], keys[0], keys[1],
-                keys[2], keys[3], (long long)g_calls, (long long)g_faults);
+                keys[2], keys[3], RevealPresses(), (long long)g_calls, (long long)g_faults);
     return buf;
 }
 

@@ -125,6 +125,19 @@ std::string ZoomJson(bool ok);
 void StartHotkeys();
 void KeyCounts(uint32_t out[kKeyCount]);
 
+// ---- controller (pad.cpp) and Show on press ----
+// The script names a controller button (Mod Settings Menu key code 256-271) and a keyboard key (virtual-key code),
+// 0 for none; the DLL counts presses of either while the game has focus. Both are read-only, so they keep their game
+// actions. The script decides what a press shows.
+void StartPad();
+bool SetRevealKeys(int padCode, int vk);  // false for codes Mod Settings Menu wouldn't store
+int RevealPadCode();
+int RevealVk();
+void CountRevealPress();
+uint32_t RevealPresses();
+double MenuSetting(const char* key, double fallback);  // a saved Mod Settings Menu value, as read at start
+bool ParseSonyReport(uint16_t pid, size_t reportLength, const uint8_t* d, size_t n, uint32_t& buttons);  // tests
+
 // ---- atlas cache (atlas.cpp) ----
 void LoadAtlasCache();
 bool StoreAtlas(uint32_t district, const std::string& json);
